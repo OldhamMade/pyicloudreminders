@@ -1,6 +1,5 @@
 import six
 import uuid
-import hashlib
 import inspect
 import json
 import logging
@@ -98,7 +97,7 @@ class PyiCloudSession(requests.Session):
     def _raise_error(self, code, reason):
         if self.service.requires_2sa and \
                 reason == 'Missing X-APPLE-WEBAUTH-TOKEN cookie':
-            raise PyiCloud2SARequiredError(response.url)
+            raise PyiCloud2SARequiredError(reason)
         if code == 'ZONE_NOT_FOUND' or code == 'AUTHENTICATION_FAILED':
             reason = 'Please log into https://icloud.com/ to manually ' \
                 'finish setting up your iCloud service'
@@ -128,7 +127,8 @@ class PyiCloudService(object):
     """
 
     def __init__(
-        self, apple_id, password=None, cookie_directory=None, verify=True
+        self, apple_id, password=None, cookie_directory=None,
+        verify=True, extended_login=False
     ):
         if password is None:
             password = get_password_from_keyring(apple_id)
@@ -136,6 +136,7 @@ class PyiCloudService(object):
         self.data = {}
         self.client_id = str(uuid.uuid1()).upper()
         self.user = {'apple_id': apple_id, 'password': password}
+        self.extended_login = extended_login
 
         self._password_filter = PyiCloudPasswordFilter(password)
         logger.addFilter(self._password_filter)
@@ -196,7 +197,7 @@ class PyiCloudService(object):
         data = dict(self.user)
 
         # We authenticate every time, so "remember me" is not needed
-        data.update({'extended_login': False})
+        data.update({'extended_login': self.extended_login})
 
         try:
             req = self.session.post(
